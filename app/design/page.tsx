@@ -11,6 +11,76 @@ import {
 } from "@/lib/supabase/catalog";
 import { addToCart, getCart, cartCount } from "@/lib/cart";
 
+const CANVAS_SIZE = 900;
+
+function loadImg(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+async function exportDesignToPng(
+  garmentUrl: string | null,
+  design: SideDesign,
+  side: Side,
+  garmentName: string
+) {
+  const canvas = document.createElement("canvas");
+  canvas.width = CANVAS_SIZE;
+  canvas.height = CANVAS_SIZE;
+  const ctx = canvas.getContext("2d")!;
+
+  // background
+  ctx.fillStyle = "#1a3a50";
+  ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+  // garment
+  if (garmentUrl) {
+    try {
+      const gImg = await loadImg(garmentUrl);
+      ctx.drawImage(gImg, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    } catch {
+      // garment image failed CORS — skip silently
+    }
+  }
+
+  // graphic overlay
+  if (design.asset) {
+    try {
+      const aImg = await loadImg(design.asset.publicUrl);
+      const size = 160 * (design.scale / 100);
+      const cx = CANVAS_SIZE / 2 + design.pos.x * (CANVAS_SIZE / 500);
+      const cy = CANVAS_SIZE / 2 + design.pos.y * (CANVAS_SIZE / 500);
+      ctx.save();
+      ctx.globalAlpha = design.opacity / 100;
+      ctx.translate(cx, cy);
+      ctx.rotate((design.rotation * Math.PI) / 180);
+      const drawSize = size * (CANVAS_SIZE / 500);
+      ctx.drawImage(aImg, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+      ctx.restore();
+    } catch {
+      // asset image failed — skip silently
+    }
+  }
+
+  return new Promise<void>((resolve) => {
+    canvas.toBlob((blob) => {
+      if (!blob) { resolve(); return; }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `inkcraft-${garmentName.toLowerCase().replace(/\s+/g, "-")}-${side}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+      resolve();
+    }, "image/png");
+  });
+}
+
 type Tab = "assets" | "controls" | "garment";
 type Side = "front" | "back";
 
@@ -121,6 +191,19 @@ function DesignEditor() {
     const url = URL.createObjectURL(file);
     patchSide({ asset: { id: `upload-${Date.now()}`, name: file.name, publicUrl: url } });
     e.target.value = "";
+  };
+
+  // --- Export ---
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    setExporting(true);
+    await exportDesignToPng(
+      activeGarment?.publicUrl ?? null,
+      cur,
+      side,
+      activeGarment?.name ?? "design"
+    );
+    setExporting(false);
   };
 
   // --- Cart ---
@@ -493,10 +576,21 @@ function DesignEditor() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-md flex-1 justify-end">
-            <p className="text-primary text-body-lg font-bold mr-sm">
+          <div className="flex items-center gap-sm flex-1 justify-end">
+            <p className="text-primary text-body-lg font-bold mr-sm hidden sm:block">
               {activeGarment ? `$${activeGarment.price.toFixed(2)}` : ""}
             </p>
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              title="Export current side as PNG"
+              className="flex items-center gap-xs text-label-md px-md py-3 rounded-lg border border-white/20 text-on-surface hover:border-primary hover:text-primary transition-all active:scale-95 disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-[18px]">
+                {exporting ? "hourglass_top" : "download"}
+              </span>
+              <span className="hidden sm:inline">{exporting ? "Saving…" : "Export"}</span>
+            </button>
             <button
               onClick={handleAddToCart}
               className={`text-label-md px-lg py-3 rounded-lg transition-all shadow-lg ${
