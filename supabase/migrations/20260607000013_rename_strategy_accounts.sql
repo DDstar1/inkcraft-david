@@ -1,0 +1,1 @@
+alter table trades_strategy_accounts rename to trades_running_strategy_accounts;
