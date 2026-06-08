@@ -11,7 +11,6 @@ import {
 } from "@/lib/supabase/catalog";
 import { addToCart } from "@/lib/cart";
 import Navbar from "@/components/Navbar";
-import { computeDisplacementMap } from "@/lib/displacement";
 
 const CANVAS_SIZE = 900;
 
@@ -162,25 +161,6 @@ function DesignEditor() {
   const patchSide = (patch: Partial<SideDesign>) =>
     setDesigns((d) => ({ ...d, [side]: { ...d[side], ...patch } }));
 
-  // --- Displacement / warp ---
-  const [warpStrength, setWarpStrength] = useState(0);
-  const [dispMapUrl, setDispMapUrl] = useState<string | null>(null);
-  const [dispLoading, setDispLoading] = useState(false);
-
-  useEffect(() => {
-    if (!activeGarment) return;
-    setDispMapUrl(null);
-    setDispLoading(true);
-    const url =
-      side === "back" && activeGarment.publicUrlBack
-        ? activeGarment.publicUrlBack
-        : activeGarment.publicUrl;
-    computeDisplacementMap(url)
-      .then(setDispMapUrl)
-      .catch(() => setDispMapUrl(null))
-      .finally(() => setDispLoading(false));
-  }, [activeGarment, side]);
-
   // --- Editor controls ---
   const [activeTab, setActiveTab] = useState<Tab>("assets");
   const [selectedColor, setSelectedColor] = useState(0);
@@ -290,33 +270,6 @@ function DesignEditor() {
             ))}
           </div>
 
-          {/* SVG displacement filter — hidden, 0×0 */}
-          {dispMapUrl && (
-            <svg style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }}>
-              <defs>
-                <filter
-                  id="cloth-warp"
-                  x="-30%" y="-30%"
-                  width="160%" height="160%"
-                  colorInterpolationFilters="sRGB"
-                >
-                  <feImage
-                    href={dispMapUrl}
-                    result="dispMap"
-                    preserveAspectRatio="xMidYMid slice"
-                  />
-                  <feDisplacementMap
-                    in="SourceGraphic"
-                    in2="dispMap"
-                    scale={warpStrength}
-                    xChannelSelector="R"
-                    yChannelSelector="G"
-                  />
-                </filter>
-              </defs>
-            </svg>
-          )}
-
           {/* Mockup + graphic container */}
           <div className="relative w-full h-full max-w-md">
             {/* Garment mockup */}
@@ -358,10 +311,7 @@ function DesignEditor() {
             {/* Draggable graphic — only visible on current side */}
             {cur.asset && (
               <div
-                style={{
-                  ...graphicStyle(cur),
-                  filter: warpStrength > 0 && dispMapUrl ? "url(#cloth-warp)" : undefined,
-                }}
+                style={graphicStyle(cur)}
                 onMouseDown={(e) => { e.preventDefault(); startDrag(e.clientX, e.clientY); }}
                 onTouchStart={(e) => startDrag(e.touches[0].clientX, e.touches[0].clientY)}
               >
@@ -505,28 +455,6 @@ function DesignEditor() {
                     <input type="range" min={0} max={100} value={cur.opacity}
                       onChange={(e) => patchSide({ opacity: Number(e.target.value) })}
                       className="w-full touch-none" />
-                  </div>
-                  <div className="space-y-sm">
-                    <div className="flex justify-between items-center">
-                      <label className="text-label-md text-on-surface-variant flex items-center gap-xs">
-                        Cloth Warp
-                        {dispLoading && (
-                          <span className="text-[9px] text-on-surface-variant/60 animate-pulse">computing…</span>
-                        )}
-                      </label>
-                      <span className="text-xs text-primary">{warpStrength}</span>
-                    </div>
-                    <input
-                      type="range" min={0} max={40} value={warpStrength}
-                      onChange={(e) => setWarpStrength(Number(e.target.value))}
-                      disabled={!dispMapUrl}
-                      className="w-full touch-none disabled:opacity-40"
-                    />
-                    <p className="text-[10px] text-on-surface-variant/60">
-                      {warpStrength === 0
-                        ? "Off — drag to warp graphic to fabric contours"
-                        : "Graphic follows fabric folds"}
-                    </p>
                   </div>
                 </div>
                 <div className="space-y-sm">
