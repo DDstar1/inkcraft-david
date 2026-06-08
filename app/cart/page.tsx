@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import Navbar from "@/components/Navbar";
 import { getCart, removeFromCart, cartTotal, type CartItem } from "@/lib/cart";
 
 export default function CartPage() {
@@ -20,18 +21,7 @@ export default function CartPage() {
 
   return (
     <div className="bg-background text-on-surface min-h-screen">
-      {/* Nav */}
-      <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-surface/80 backdrop-blur-md">
-        <div className="flex justify-between items-center px-margin-desktop h-16 w-full max-w-7xl mx-auto">
-          <Link href="/" className="text-title-md font-bold text-primary">InkCraft by David</Link>
-          <div className="hidden md:flex gap-lg items-center">
-            <Link href="/" className="text-on-surface hover:text-primary transition-colors text-body-md">Shop</Link>
-            <Link href="/design" className="text-on-surface hover:text-primary transition-colors text-body-md">Design</Link>
-            <Link href="/admin" className="text-on-surface hover:text-primary transition-colors text-body-md">Admin</Link>
-          </div>
-          <Link href="/cart" className="text-primary material-symbols-outlined p-2">shopping_cart</Link>
-        </div>
-      </nav>
+      <Navbar />
 
       <main className="pt-28 pb-xl px-margin-desktop max-w-3xl mx-auto">
         <h1 className="text-headline-lg text-on-surface mb-lg">Your Cart</h1>

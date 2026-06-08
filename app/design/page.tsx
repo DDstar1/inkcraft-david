@@ -9,7 +9,8 @@ import {
   type Garment,
   type DesignAsset,
 } from "@/lib/supabase/catalog";
-import { addToCart, getCart, cartCount } from "@/lib/cart";
+import { addToCart } from "@/lib/cart";
+import Navbar from "@/components/Navbar";
 
 const CANVAS_SIZE = 900;
 
@@ -198,7 +199,9 @@ function DesignEditor() {
   const handleExport = async () => {
     setExporting(true);
     await exportDesignToPng(
-      activeGarment?.publicUrl ?? null,
+      side === "back" && activeGarment?.publicUrlBack
+        ? activeGarment.publicUrlBack
+        : (activeGarment?.publicUrl ?? null),
       cur,
       side,
       activeGarment?.name ?? "design"
@@ -207,14 +210,7 @@ function DesignEditor() {
   };
 
   // --- Cart ---
-  const [cartItems, setCartItems] = useState(getCart());
   const [cartAdded, setCartAdded] = useState(false);
-
-  useEffect(() => {
-    const sync = () => setCartItems(getCart());
-    window.addEventListener("inkcraft_cart_change", sync);
-    return () => window.removeEventListener("inkcraft_cart_change", sync);
-  }, []);
 
   const handleAddToCart = () => {
     if (!activeGarment) return;
@@ -224,7 +220,6 @@ function DesignEditor() {
       garmentImageUrl: activeGarment.publicUrl,
       price: activeGarment.price,
     });
-    setCartItems(getCart());
     setCartAdded(true);
     setTimeout(() => setCartAdded(false), 1500);
   };
@@ -245,35 +240,7 @@ function DesignEditor() {
 
   return (
     <div className="bg-background text-on-surface overflow-hidden h-screen flex flex-col">
-      {/* Header */}
-      <header className="fixed top-0 w-full z-50 border-b border-white/5 bg-surface/80 backdrop-blur-md shadow-sm">
-        <div className="flex justify-between items-center px-margin-mobile h-16 w-full max-w-7xl mx-auto">
-          <div className="text-body-lg font-bold text-primary truncate max-w-[150px] sm:max-w-none">
-            InkCraft by David
-          </div>
-          <div className="flex items-center gap-base">
-            <button className="p-2 text-on-surface hover:text-primary transition-all md:hidden">
-              <span className="material-symbols-outlined">menu</span>
-            </button>
-            <nav className="hidden md:flex gap-md mr-md">
-              <a href="/" className="text-on-surface hover:text-primary transition-colors duration-200 text-body-md">Shop</a>
-              <a href="/design" className="text-primary font-bold border-b-2 border-primary pb-1 text-body-md">Design</a>
-              <a href="/admin" className="text-on-surface hover:text-primary transition-colors duration-200 text-body-md">Admin</a>
-            </nav>
-            <a href="/cart" className="p-2 text-on-surface hover:text-primary transition-all relative inline-flex">
-              <span className="material-symbols-outlined">shopping_cart</span>
-              {cartCount(cartItems) > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary text-on-primary text-[9px] font-bold flex items-center justify-center">
-                  {cartCount(cartItems)}
-                </span>
-              )}
-            </a>
-            <button className="p-2 text-on-surface hover:text-primary transition-all hidden sm:block">
-              <span className="material-symbols-outlined">account_circle</span>
-            </button>
-          </div>
-        </div>
-      </header>
+      <Navbar />
 
       {/* Main Editor Workspace */}
       <main className="flex-1 mt-16 mb-20 flex flex-col overflow-hidden">
@@ -308,7 +275,11 @@ function DesignEditor() {
             {/* Garment mockup */}
             {activeGarment ? (
               <Image
-                src={activeGarment.publicUrl}
+                src={
+                  side === "back" && activeGarment.publicUrlBack
+                    ? activeGarment.publicUrlBack
+                    : activeGarment.publicUrl
+                }
                 alt={activeGarment.name}
                 fill
                 className="object-contain pointer-events-none drop-shadow-2xl brightness-95"

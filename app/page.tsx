@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import CartBadge from "@/components/CartBadge";
+import Navbar from "@/components/Navbar";
 
 const PRODUCTS = [
   {
@@ -53,23 +53,7 @@ const PRODUCTS = [
 export default function Home() {
   return (
     <>
-      {/* TopNavBar */}
-      <nav className="fixed top-0 w-full z-50 border-b border-white/5 bg-surface/80 backdrop-blur-md shadow-sm">
-        <div className="flex justify-between items-center px-margin-desktop h-16 w-full max-w-7xl mx-auto">
-          <div className="text-title-md font-bold text-primary">InkCraft by David</div>
-          <div className="hidden md:flex gap-lg items-center">
-            <Link className="text-primary font-bold border-b-2 border-primary pb-1 text-body-md" href="/">Shop</Link>
-            <Link className="text-on-surface hover:text-primary transition-colors duration-200 text-body-md" href="/design">Design</Link>
-            <Link className="text-on-surface hover:text-primary transition-colors duration-200 text-body-md" href="/admin">Admin</Link>
-          </div>
-          <div className="flex items-center gap-md">
-            <CartBadge />
-            <button className="material-symbols-outlined text-on-surface hover:text-primary transition-all active:opacity-80">
-              account_circle
-            </button>
-          </div>
-        </div>
-      </nav>
+      <Navbar />
 
       {/* Main Content */}
       <main className="pt-16 pb-xl">
