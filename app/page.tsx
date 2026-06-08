@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import CartBadge from "@/components/CartBadge";
 
 const PRODUCTS = [
   {
@@ -62,9 +63,7 @@ export default function Home() {
             <Link className="text-on-surface hover:text-primary transition-colors duration-200 text-body-md" href="/admin">Admin</Link>
           </div>
           <div className="flex items-center gap-md">
-            <button className="material-symbols-outlined text-on-surface hover:text-primary transition-all active:opacity-80">
-              shopping_cart
-            </button>
+            <CartBadge />
             <button className="material-symbols-outlined text-on-surface hover:text-primary transition-all active:opacity-80">
               account_circle
             </button>

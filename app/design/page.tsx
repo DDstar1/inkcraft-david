@@ -9,8 +9,32 @@ import {
   type Garment,
   type DesignAsset,
 } from "@/lib/supabase/catalog";
+import { addToCart, getCart, cartCount } from "@/lib/cart";
 
 type Tab = "assets" | "controls" | "garment";
+type Side = "front" | "back";
+
+type ActiveAsset = {
+  id: string;
+  name: string;
+  publicUrl: string;
+};
+
+type SideDesign = {
+  asset: ActiveAsset | null;
+  pos: { x: number; y: number };
+  scale: number;
+  rotation: number;
+  opacity: number;
+};
+
+const DEFAULT_SIDE: SideDesign = {
+  asset: null,
+  pos: { x: 0, y: 0 },
+  scale: 100,
+  rotation: 0,
+  opacity: 100,
+};
 
 const ICON_ASSETS = ["eco", "diamond", "auto_awesome", "architecture"];
 
@@ -27,22 +51,14 @@ const GARMENT_COLORS = [
   { bg: "#8B1A1A", label: "Crimson" },
 ];
 
-// A design asset entry that can be a Supabase asset or a local upload
-type ActiveAsset = {
-  id: string;
-  name: string;
-  publicUrl: string;
-};
-
 function DesignEditor() {
   const searchParams = useSearchParams();
   const garmentSlug = searchParams.get("garment");
 
-  // --- Catalog from Supabase ---
+  // --- Catalog ---
   const [garments, setGarments] = useState<Garment[]>([]);
   const [designAssets, setDesignAssets] = useState<DesignAsset[]>([]);
   const [activeGarment, setActiveGarment] = useState<Garment | null>(null);
-  const [activeAsset, setActiveAsset] = useState<ActiveAsset | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -52,38 +68,50 @@ function DesignEditor() {
         setDesignAssets(a);
         const preselected = garmentSlug ? g.find((x) => x.slug === garmentSlug) : null;
         setActiveGarment(preselected ?? g[0] ?? null);
-        if (a.length) setActiveAsset(a[0]);
+        if (a.length) {
+          setDesigns((d) => ({
+            front: { ...d.front, asset: a[0] },
+            back: { ...d.back, asset: a[0] },
+          }));
+        }
       })
       .finally(() => setLoading(false));
   }, [garmentSlug]);
 
+  // --- Front / back designs ---
+  const [side, setSide] = useState<Side>("front");
+  const [designs, setDesigns] = useState<{ front: SideDesign; back: SideDesign }>({
+    front: { ...DEFAULT_SIDE },
+    back: { ...DEFAULT_SIDE },
+  });
+
+  const cur = designs[side];
+
+  const patchSide = (patch: Partial<SideDesign>) =>
+    setDesigns((d) => ({ ...d, [side]: { ...d[side], ...patch } }));
+
   // --- Editor controls ---
   const [activeTab, setActiveTab] = useState<Tab>("assets");
-  const [scale, setScale] = useState(100);
-  const [rotation, setRotation] = useState(0);
-  const [opacity, setOpacity] = useState(100);
   const [selectedColor, setSelectedColor] = useState(0);
 
   // --- Drag state ---
-  const [pos, setPos] = useState({ x: 0, y: 0 });
   const isDragging = useRef(false);
   const dragOrigin = useRef({ mx: 0, my: 0, px: 0, py: 0 });
 
   const startDrag = (clientX: number, clientY: number) => {
     isDragging.current = true;
-    dragOrigin.current = { mx: clientX, my: clientY, px: pos.x, py: pos.y };
+    dragOrigin.current = { mx: clientX, my: clientY, px: cur.pos.x, py: cur.pos.y };
   };
   const moveDrag = (clientX: number, clientY: number) => {
     if (!isDragging.current) return;
-    setPos({
-      x: dragOrigin.current.px + (clientX - dragOrigin.current.mx),
-      y: dragOrigin.current.py + (clientY - dragOrigin.current.my),
+    patchSide({
+      pos: {
+        x: dragOrigin.current.px + (clientX - dragOrigin.current.mx),
+        y: dragOrigin.current.py + (clientY - dragOrigin.current.my),
+      },
     });
   };
   const endDrag = () => { isDragging.current = false; };
-
-  // Reset position when asset changes
-  useEffect(() => { setPos({ x: 0, y: 0 }); }, [activeAsset?.id]);
 
   // --- Upload ---
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -91,33 +119,46 @@ function DesignEditor() {
     const file = e.target.files?.[0];
     if (!file) return;
     const url = URL.createObjectURL(file);
-    setActiveAsset({ id: `upload-${Date.now()}`, name: file.name, publicUrl: url });
-    // Reset file input so the same file can be re-uploaded
+    patchSide({ asset: { id: `upload-${Date.now()}`, name: file.name, publicUrl: url } });
     e.target.value = "";
   };
 
   // --- Cart ---
-  const [cartCount, setCartCount] = useState(0);
+  const [cartItems, setCartItems] = useState(getCart());
   const [cartAdded, setCartAdded] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setCartItems(getCart());
+    window.addEventListener("inkcraft_cart_change", sync);
+    return () => window.removeEventListener("inkcraft_cart_change", sync);
+  }, []);
+
   const handleAddToCart = () => {
-    setCartCount((n) => n + 1);
+    if (!activeGarment) return;
+    addToCart({
+      garmentSlug: activeGarment.slug,
+      garmentName: activeGarment.name,
+      garmentImageUrl: activeGarment.publicUrl,
+      price: activeGarment.price,
+    });
+    setCartItems(getCart());
     setCartAdded(true);
     setTimeout(() => setCartAdded(false), 1500);
   };
 
-  const graphicStyle: React.CSSProperties = {
+  const graphicStyle = (d: SideDesign): React.CSSProperties => ({
     position: "absolute",
     top: "50%",
     left: "50%",
     width: 160,
     height: 160,
-    transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px)) scale(${scale / 100}) rotate(${rotation}deg)`,
-    opacity: opacity / 100,
+    transform: `translate(calc(-50% + ${d.pos.x}px), calc(-50% + ${d.pos.y}px)) scale(${d.scale / 100}) rotate(${d.rotation}deg)`,
+    opacity: d.opacity / 100,
     cursor: isDragging.current ? "grabbing" : "grab",
     userSelect: "none",
     touchAction: "none",
     zIndex: 20,
-  };
+  });
 
   return (
     <div className="bg-background text-on-surface overflow-hidden h-screen flex flex-col">
@@ -136,14 +177,14 @@ function DesignEditor() {
               <a href="/design" className="text-primary font-bold border-b-2 border-primary pb-1 text-body-md">Design</a>
               <a href="/admin" className="text-on-surface hover:text-primary transition-colors duration-200 text-body-md">Admin</a>
             </nav>
-            <button className="p-2 text-on-surface hover:text-primary transition-all relative">
+            <a href="/cart" className="p-2 text-on-surface hover:text-primary transition-all relative inline-flex">
               <span className="material-symbols-outlined">shopping_cart</span>
-              {cartCount > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-primary text-on-primary text-[9px] font-bold flex items-center justify-center">
-                  {cartCount}
+              {cartCount(cartItems) > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary text-on-primary text-[9px] font-bold flex items-center justify-center">
+                  {cartCount(cartItems)}
                 </span>
               )}
-            </button>
+            </a>
             <button className="p-2 text-on-surface hover:text-primary transition-all hidden sm:block">
               <span className="material-symbols-outlined">account_circle</span>
             </button>
@@ -162,6 +203,23 @@ function DesignEditor() {
           onTouchMove={(e) => { e.preventDefault(); moveDrag(e.touches[0].clientX, e.touches[0].clientY); }}
           onTouchEnd={endDrag}
         >
+          {/* Front/Back toggle */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 flex bg-surface-container/70 backdrop-blur-md rounded-full border border-white/10 z-30 overflow-hidden shadow-lg">
+            {(["front", "back"] as Side[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setSide(s)}
+                className={`px-md py-xs text-label-md capitalize transition-all ${
+                  side === s
+                    ? "bg-primary text-on-primary"
+                    : "text-on-surface-variant hover:text-on-surface"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+
           {/* Mockup + graphic container */}
           <div className="relative w-full h-full max-w-md">
             {/* Garment mockup */}
@@ -179,7 +237,15 @@ function DesignEditor() {
               </div>
             )}
 
-            {/* Print area guide — pointer-events-none so it doesn't block drag */}
+            {/* Side label */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-xs text-[10px] uppercase tracking-[0.2em] text-on-surface-variant/60 pointer-events-none">
+              <span className="material-symbols-outlined text-[14px]">
+                {side === "front" ? "front_hand" : "back_hand"}
+              </span>
+              {side}
+            </div>
+
+            {/* Print area guide */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ paddingTop: "8%" }}>
               <div className="w-[46%] h-[52%] border-2 border-dashed border-primary/30 rounded-sm relative">
                 <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-primary text-[8px] uppercase tracking-[0.2em] opacity-50 whitespace-nowrap">
@@ -188,19 +254,19 @@ function DesignEditor() {
               </div>
             </div>
 
-            {/* Draggable graphic */}
-            {activeAsset && (
+            {/* Draggable graphic — only visible on current side */}
+            {cur.asset && (
               <div
-                style={graphicStyle}
+                style={graphicStyle(cur)}
                 onMouseDown={(e) => { e.preventDefault(); startDrag(e.clientX, e.clientY); }}
                 onTouchStart={(e) => startDrag(e.touches[0].clientX, e.touches[0].clientY)}
               >
                 <Image
-                  src={activeAsset.publicUrl}
-                  alt={activeAsset.name}
+                  src={cur.asset.publicUrl}
+                  alt={cur.asset.name}
                   fill
                   className="object-contain drop-shadow-lg pointer-events-none"
-                  unoptimized={activeAsset.id.startsWith("upload-")}
+                  unoptimized={cur.asset.id.startsWith("upload-")}
                 />
               </div>
             )}
@@ -209,13 +275,13 @@ function DesignEditor() {
           {/* Zoom controls */}
           <div className="absolute bottom-4 right-4 flex flex-col gap-base bg-surface-container/60 backdrop-blur-md p-1 rounded-full border border-white/5">
             <button
-              onClick={() => setScale((s) => Math.min(200, s + 10))}
+              onClick={() => patchSide({ scale: Math.min(200, cur.scale + 10) })}
               className="p-2 hover:bg-primary-container hover:text-on-primary rounded-full transition-all"
             >
               <span className="material-symbols-outlined text-sm">zoom_in</span>
             </button>
             <button
-              onClick={() => setScale((s) => Math.max(10, s - 10))}
+              onClick={() => patchSide({ scale: Math.max(10, cur.scale - 10) })}
               className="p-2 hover:bg-primary-container hover:text-on-primary rounded-full transition-all"
             >
               <span className="material-symbols-outlined text-sm">zoom_out</span>
@@ -253,7 +319,6 @@ function DesignEditor() {
             {/* Assets Tab */}
             {activeTab === "assets" && (
               <div className="p-md space-y-md">
-                {/* Hidden file input */}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -276,9 +341,9 @@ function DesignEditor() {
                     {designAssets.map((asset) => (
                       <div
                         key={asset.id}
-                        onClick={() => setActiveAsset(asset)}
+                        onClick={() => patchSide({ asset })}
                         className={`aspect-square glass-panel rounded-lg flex items-center justify-center cursor-pointer transition-all group overflow-hidden ${
-                          activeAsset?.id === asset.id
+                          cur.asset?.id === asset.id
                             ? "border border-primary/60 bg-white/10"
                             : "hover:border-primary/50"
                         }`}
@@ -313,28 +378,28 @@ function DesignEditor() {
                   <div className="space-y-sm">
                     <div className="flex justify-between items-center">
                       <label className="text-label-md text-on-surface-variant">Scale</label>
-                      <span className="text-xs text-primary">{scale}%</span>
+                      <span className="text-xs text-primary">{cur.scale}%</span>
                     </div>
-                    <input type="range" min={10} max={200} value={scale}
-                      onChange={(e) => setScale(Number(e.target.value))}
+                    <input type="range" min={10} max={200} value={cur.scale}
+                      onChange={(e) => patchSide({ scale: Number(e.target.value) })}
                       className="w-full touch-none" />
                   </div>
                   <div className="space-y-sm">
                     <div className="flex justify-between items-center">
                       <label className="text-label-md text-on-surface-variant">Rotation</label>
-                      <span className="text-xs text-primary">{rotation}°</span>
+                      <span className="text-xs text-primary">{cur.rotation}°</span>
                     </div>
-                    <input type="range" min={-180} max={180} value={rotation}
-                      onChange={(e) => setRotation(Number(e.target.value))}
+                    <input type="range" min={-180} max={180} value={cur.rotation}
+                      onChange={(e) => patchSide({ rotation: Number(e.target.value) })}
                       className="w-full touch-none" />
                   </div>
                   <div className="space-y-sm">
                     <div className="flex justify-between items-center">
                       <label className="text-label-md text-on-surface-variant">Opacity</label>
-                      <span className="text-xs text-primary">{opacity}%</span>
+                      <span className="text-xs text-primary">{cur.opacity}%</span>
                     </div>
-                    <input type="range" min={0} max={100} value={opacity}
-                      onChange={(e) => setOpacity(Number(e.target.value))}
+                    <input type="range" min={0} max={100} value={cur.opacity}
+                      onChange={(e) => patchSide({ opacity: Number(e.target.value) })}
                       className="w-full touch-none" />
                   </div>
                 </div>
@@ -345,9 +410,9 @@ function DesignEditor() {
                       <button
                         key={icon}
                         onClick={() => {
-                          if (i === 0) setPos((p) => ({ ...p, x: -80 }));
-                          if (i === 1) setPos((p) => ({ ...p, x: 0 }));
-                          if (i === 2) setPos((p) => ({ ...p, x: 80 }));
+                          if (i === 0) patchSide({ pos: { ...cur.pos, x: -80 } });
+                          if (i === 1) patchSide({ pos: { ...cur.pos, x: 0 } });
+                          if (i === 2) patchSide({ pos: { ...cur.pos, x: 80 } });
                         }}
                         className="h-12 rounded flex items-center justify-center glass-panel hover:bg-white/10 transition-colors"
                       >

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
+import { fetchGarments, fetchDesignAssets, type Garment, type DesignAsset } from "@/lib/supabase/catalog";
 
 const STATS = [
   {
@@ -55,22 +57,17 @@ const ORDERS = [
   },
 ];
 
-const ASSETS = [
-  {
-    src: "https://lh3.googleusercontent.com/aida/AP1WRLuxdKVaAv-3YpNZHUwxugJh13AuXBwPv-eFEzyS4uQpsifFyEJVnTQDwwf60IaJTaWNAFgAEOfLVE2xpUul3LA3SeUkrkgrwoRENBvoQhAhjro-v6hT83R4oij3fAS_BxnlZYJlgoU1T8jw7vJiz6brQMOxccPfr65ub6viFzlatD7XY6LHl_NVm0ekdQTsKY9PsHco2YlFfw7-3II8DgOcltqmczD1q570qD_OY1Ok232YrVmy36KbTQdr",
-    title: "Aura Abstract v.2",
-  },
-  {
-    src: "https://lh3.googleusercontent.com/aida/AP1WRLuUirhnXtryQqyWMUdlcrX-u8OCZcmrtWMItAtBzh6l9Cp8ox3_C9LTV5o-zjCqHX3_-Rc4au9Hgv2IhsJcreGCUtPvy1OwcFUz6_6sWSuUYylRToEGBemk4IT6IrRZ1uewRyXzqhYANdKHmLlGH5LFojYzzuweXevz9sN3n43mLPIWHbdhJuqvUf9KyWUKXKRnKEAaslw87kcyncjxWtBq-PKBgu_p1IkKaRJ6LkWEDot2-wnAZW3kNXKu",
-    title: "Cyber Gold Monogram",
-  },
-  {
-    src: "https://lh3.googleusercontent.com/aida/AP1WRLuZ3DCqRmFucExjD2JMQvpuS7zqo7z_lQSj53gNBmG3lAm89PlFGweFyAA8W8U7rtqP-vD1zygqDVjCgyk-u5yVkLaqQsVmTWVRkdEq5VrfO5LTTtzopGty8H8U7v9Tb272n86Bpc-sK2-lG138fMWE8XaNFZ3uPYTEAHqnfz7q7RXTw6fW7ZP15WjU8ROCp6seC7Ztt28g0dSwqHzVKgdjtXWO9Qkpr1OXuxJWimNGWYk4-UX6pC5R2F8",
-    title: "Velvet Flow 04",
-  },
-];
-
 export default function AdminPage() {
+  const [garments, setGarments] = useState<Garment[]>([]);
+  const [designAssets, setDesignAssets] = useState<DesignAsset[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([fetchGarments(), fetchDesignAssets()])
+      .then(([g, a]) => { setGarments(g); setDesignAssets(a); })
+      .finally(() => setCatalogLoading(false));
+  }, []);
+
   const [bgStyle, setBgStyle] = useState<React.CSSProperties>({
     backgroundColor: "#0d1b2a",
     backgroundImage:
@@ -137,8 +134,32 @@ export default function AdminPage() {
           </div>
         </header>
 
-        {/* Stats Grid */}
+        {/* Stats Grid — first two are live from Supabase */}
         <div className="grid grid-cols-2 gap-sm mb-xl">
+          <div className="glass-card p-sm rounded-xl">
+            <div className="flex justify-between items-start mb-base">
+              <span className="p-xs bg-primary-container/20 rounded-lg">
+                <span className="material-symbols-outlined text-primary">checkroom</span>
+              </span>
+              <span className="text-primary text-label-md">Live</span>
+            </div>
+            <p className="text-label-md text-on-surface-variant">Garments in Catalog</p>
+            <h3 className="text-headline-lg text-primary">
+              {catalogLoading ? "…" : String(garments.length).padStart(2, "0")}
+            </h3>
+          </div>
+          <div className="glass-card p-sm rounded-xl">
+            <div className="flex justify-between items-start mb-base">
+              <span className="p-xs bg-tertiary-container/20 rounded-lg">
+                <span className="material-symbols-outlined text-tertiary">brush</span>
+              </span>
+              <span className="text-primary text-label-md">Live</span>
+            </div>
+            <p className="text-label-md text-on-surface-variant">Design Assets</p>
+            <h3 className="text-headline-lg text-on-surface">
+              {catalogLoading ? "…" : String(designAssets.length).padStart(2, "0")}
+            </h3>
+          </div>
           {STATS.map(({ icon, iconBg, iconColor, label, value, badge, badgeColor }) => (
             <div key={label} className="glass-card p-sm rounded-xl">
               <div className="flex justify-between items-start mb-base">
@@ -218,27 +239,38 @@ export default function AdminPage() {
           </div>
         </section>
 
-        {/* Trending Design Assets */}
+        {/* Trending Garments */}
         <section className="mt-xl">
-          <h4 className="text-title-md text-on-surface mb-md">Trending Design Assets</h4>
-          <div className="grid grid-cols-2 gap-sm">
-            {ASSETS.map(({ src, title }) => (
-              <div
-                key={title}
-                className="col-span-1 h-40 glass-card rounded-xl relative overflow-hidden group"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={src}
-                  alt={title}
-                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent flex items-end p-md opacity-0 group-hover:opacity-100 transition-opacity">
-                  <p className="text-label-md text-primary">{title}</p>
+          <h4 className="text-title-md text-on-surface mb-md">Garment Catalog</h4>
+          {catalogLoading ? (
+            <div className="grid grid-cols-2 gap-sm">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-40 glass-card rounded-xl animate-pulse bg-surface-container-high" />
+              ))}
+            </div>
+          ) : garments.length === 0 ? (
+            <p className="text-on-surface-variant text-body-md">No garments in catalog yet.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-sm">
+              {garments.map((g) => (
+                <div key={g.id} className="col-span-1 h-40 glass-card rounded-xl relative overflow-hidden group">
+                  <Image
+                    src={g.publicUrl}
+                    alt={g.name}
+                    fill
+                    className="object-cover transition-transform duration-700 group-hover:scale-110"
+                    unoptimized
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-background/90 to-transparent flex items-end p-md opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div>
+                      <p className="text-label-md text-primary">{g.name}</p>
+                      <p className="text-[11px] text-on-surface-variant">${g.price}</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* Footer */}
